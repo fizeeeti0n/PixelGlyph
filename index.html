@@ -6,35 +6,550 @@
 <title>PixelGlyph — ASCII Art Generator</title>
 <script src="https://cdn.tailwindcss.com"></script>
 <link href="https://fonts.googleapis.com/css2?family=Share+Tech+Mono&family=Orbitron:wght@400;700;900&display=swap" rel="stylesheet" />
-<link rel="stylesheet" href="styles.css" />
+<style>
+  :root {
+    --cyan: #00ffe7;
+    --purple: #b400ff;
+    --bg: #080b10;
+    --panel: #0d1117;
+    --border: #1a2535;
+    --text: #c9d1d9;
+    --glow: 0 0 8px #00ffe799, 0 0 24px #00ffe733;
+    --glow-sm: 0 0 4px #00ffe766;
+  }
+
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+
+  body {
+    background: var(--bg);
+    color: var(--text);
+    font-family: 'Share Tech Mono', monospace;
+    height: 100dvh;
+    overflow: hidden;
+    display: flex;
+    flex-direction: column;
+  }
+
+  /* Scanline overlay */
+  body::before {
+    content: '';
+    position: fixed; inset: 0;
+    background: repeating-linear-gradient(
+      0deg,
+      transparent,
+      transparent 2px,
+      rgba(0,255,231,0.015) 2px,
+      rgba(0,255,231,0.015) 4px
+    );
+    pointer-events: none;
+    z-index: 9999;
+  }
+
+  /* Header */
+  header {
+    flex-shrink: 0;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 10px 20px;
+    border-bottom: 1px solid var(--border);
+    background: var(--panel);
+    position: relative;
+    overflow: hidden;
+  }
+  header::after {
+    content: '';
+    position: absolute; bottom: 0; left: 0; right: 0; height: 1px;
+    background: linear-gradient(90deg, transparent, var(--cyan), transparent);
+    opacity: .6;
+  }
+
+  .logo {
+    font-family: 'Orbitron', sans-serif;
+    font-weight: 900;
+    font-size: 1.25rem;
+    letter-spacing: 0.1em;
+    color: var(--cyan);
+    text-shadow: var(--glow);
+  }
+  .logo span { color: var(--purple); text-shadow: 0 0 8px #b400ff99; }
+
+  .header-right {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+  }
+
+  /* Main layout */
+  main {
+    flex: 1;
+    display: flex;
+    overflow: hidden;
+    min-height: 0;
+  }
+
+  /* Controls panel */
+  #controls {
+    width: 260px;
+    min-width: 260px;
+    flex-shrink: 0;
+    background: var(--panel);
+    border-right: 1px solid var(--border);
+    overflow-y: auto;
+    overflow-x: hidden;
+    padding: 14px;
+    display: flex;
+    flex-direction: column;
+    gap: 14px;
+    scrollbar-width: thin;
+    scrollbar-color: var(--border) transparent;
+  }
+
+  #controls::-webkit-scrollbar { width: 4px; }
+  #controls::-webkit-scrollbar-thumb { background: var(--border); border-radius: 2px; }
+
+  /* Upload zone */
+  #drop-zone {
+    border: 2px dashed #1e3a4a;
+    border-radius: 8px;
+    padding: 18px 10px;
+    text-align: center;
+    cursor: pointer;
+    transition: all .25s;
+    position: relative;
+    background: #0a141e;
+  }
+  #drop-zone:hover, #drop-zone.drag-over {
+    border-color: var(--cyan);
+    background: #0a1f26;
+    box-shadow: inset 0 0 20px #00ffe711;
+  }
+  #drop-zone .icon { font-size: 2rem; display: block; margin-bottom: 6px; }
+  #drop-zone p { font-size: .72rem; color: #5a7a8a; line-height: 1.4; }
+  #drop-zone strong { color: var(--cyan); }
+  #file-input { display: none; }
+
+  /* Section label */
+  .section-label {
+    font-family: 'Orbitron', sans-serif;
+    font-size: .6rem;
+    letter-spacing: .15em;
+    color: var(--cyan);
+    text-transform: uppercase;
+    opacity: .7;
+    margin-bottom: 2px;
+    display: flex;
+    align-items: center;
+    gap: 6px;
+  }
+  .section-label::after {
+    content: '';
+    flex: 1;
+    height: 1px;
+    background: linear-gradient(90deg, var(--border), transparent);
+  }
+
+  /* Controls group */
+  .ctrl-group { display: flex; flex-direction: column; gap: 8px; }
+
+  .ctrl-row {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+  }
+  .ctrl-row label {
+    display: flex;
+    justify-content: space-between;
+    font-size: .72rem;
+    color: #7a9aaa;
+  }
+  .ctrl-row label span { color: var(--cyan); font-size: .72rem; }
+
+  /* Sliders */
+  input[type=range] {
+    -webkit-appearance: none;
+    appearance: none;
+    width: 100%;
+    height: 3px;
+    background: var(--border);
+    border-radius: 2px;
+    outline: none;
+    cursor: pointer;
+  }
+  input[type=range]::-webkit-slider-thumb {
+    -webkit-appearance: none;
+    width: 14px; height: 14px;
+    border-radius: 50%;
+    background: var(--cyan);
+    box-shadow: var(--glow-sm);
+    cursor: pointer;
+    transition: transform .15s;
+  }
+  input[type=range]::-webkit-slider-thumb:hover { transform: scale(1.3); }
+  input[type=range]::-moz-range-thumb {
+    width: 14px; height: 14px;
+    border-radius: 50%;
+    background: var(--cyan);
+    border: none;
+    box-shadow: var(--glow-sm);
+    cursor: pointer;
+  }
+
+  /* Select */
+  select {
+    width: 100%;
+    background: #0a141e;
+    border: 1px solid var(--border);
+    color: var(--text);
+    padding: 6px 8px;
+    border-radius: 6px;
+    font-family: 'Share Tech Mono', monospace;
+    font-size: .75rem;
+    outline: none;
+    cursor: pointer;
+    transition: border-color .2s;
+  }
+  select:focus { border-color: var(--cyan); }
+
+  /* Toggle */
+  .toggle-row {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    font-size: .75rem;
+    color: #7a9aaa;
+  }
+  .toggle {
+    position: relative;
+    width: 36px; height: 20px;
+    flex-shrink: 0;
+  }
+  .toggle input { opacity: 0; width: 0; height: 0; }
+  .toggle-track {
+    position: absolute; inset: 0;
+    background: var(--border);
+    border-radius: 20px;
+    cursor: pointer;
+    transition: background .25s;
+  }
+  .toggle input:checked + .toggle-track { background: var(--cyan); }
+  .toggle-track::after {
+    content: '';
+    position: absolute;
+    left: 3px; top: 3px;
+    width: 14px; height: 14px;
+    border-radius: 50%;
+    background: #fff;
+    transition: transform .25s;
+  }
+  .toggle input:checked + .toggle-track::after { transform: translateX(16px); }
+
+  /* Buttons */
+  .btn {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 6px;
+    padding: 8px 12px;
+    border-radius: 6px;
+    font-family: 'Share Tech Mono', monospace;
+    font-size: .75rem;
+    letter-spacing: .05em;
+    cursor: pointer;
+    border: none;
+    transition: all .2s;
+    width: 100%;
+  }
+  .btn-primary {
+    background: transparent;
+    border: 1px solid var(--cyan);
+    color: var(--cyan);
+  }
+  .btn-primary:hover {
+    background: #00ffe711;
+    box-shadow: var(--glow-sm);
+  }
+  .btn-secondary {
+    background: transparent;
+    border: 1px solid var(--border);
+    color: #7a9aaa;
+  }
+  .btn-secondary:hover {
+    border-color: var(--purple);
+    color: var(--purple);
+  }
+  .btn-camera {
+    background: transparent;
+    border: 1px solid #2a1f3a;
+    color: #9a6aaa;
+  }
+  .btn-camera:hover {
+    border-color: var(--purple);
+    color: var(--purple);
+    box-shadow: 0 0 4px #b400ff66;
+  }
+  .btn-export-row {
+    display: grid;
+    grid-template-columns: 1fr 1fr 1fr;
+    gap: 6px;
+  }
+  .btn-export-row .btn { font-size: .65rem; padding: 7px 4px; }
+
+  /* Presets */
+  .preset-grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 6px;
+  }
+  .preset-btn {
+    padding: 6px 8px;
+    border-radius: 6px;
+    border: 1px solid var(--border);
+    background: #0a141e;
+    color: #7a9aaa;
+    font-family: 'Share Tech Mono', monospace;
+    font-size: .7rem;
+    cursor: pointer;
+    text-align: center;
+    transition: all .2s;
+  }
+  .preset-btn:hover, .preset-btn.active {
+    border-color: var(--cyan);
+    color: var(--cyan);
+    background: #0a1f26;
+  }
+
+  /* Preview panel */
+  #preview-panel {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+    min-width: 0;
+    position: relative;
+  }
+
+  #preview-toolbar {
+    flex-shrink: 0;
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 8px 16px;
+    border-bottom: 1px solid var(--border);
+    background: #0a0d12;
+  }
+
+  .status-dot {
+    width: 8px; height: 8px;
+    border-radius: 50%;
+    background: #2a3a2a;
+    flex-shrink: 0;
+  }
+  .status-dot.active {
+    background: var(--cyan);
+    box-shadow: 0 0 6px var(--cyan);
+    animation: pulse 2s infinite;
+  }
+  @keyframes pulse {
+    0%,100% { opacity: 1; }
+    50% { opacity: .4; }
+  }
+
+  #status-text { font-size: .7rem; color: #5a7a8a; flex: 1; }
+
+  /* ASCII output */
+  #ascii-container {
+    flex: 1;
+    overflow: auto;
+    position: relative;
+    background: var(--bg);
+    scrollbar-width: thin;
+    scrollbar-color: var(--border) transparent;
+  }
+  #ascii-container::-webkit-scrollbar { width: 6px; height: 6px; }
+  #ascii-container::-webkit-scrollbar-thumb { background: var(--border); border-radius: 3px; }
+
+  #ascii-output {
+    font-family: 'Share Tech Mono', monospace;
+    white-space: pre;
+    line-height: 1;
+    padding: 16px;
+    display: block;
+    color: var(--cyan);
+    text-shadow: 0 0 3px #00ffe755;
+    transition: color .3s, text-shadow .3s;
+    min-height: 100%;
+  }
+
+  /* Themes */
+  #ascii-output.theme-matrix {
+    color: #00ff41;
+    text-shadow: 0 0 4px #00ff4188;
+  }
+  #ascii-output.theme-contrast {
+    color: #fff;
+    text-shadow: none;
+  }
+  #ascii-output.theme-terminal {
+    color: #ffb700;
+    text-shadow: 0 0 3px #ffb70066;
+  }
+  #ascii-output.theme-purple {
+    color: var(--purple);
+    text-shadow: 0 0 4px #b400ff88;
+  }
+
+  /* Light bg mode */
+  #ascii-container.light-bg {
+    background: #f0f0f0;
+  }
+  #ascii-container.light-bg #ascii-output {
+    color: #111;
+    text-shadow: none;
+  }
+
+  /* Empty state */
+  #empty-state {
+    position: absolute;
+    inset: 0;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    color: #2a3a4a;
+    gap: 10px;
+    pointer-events: none;
+  }
+  #empty-state .big-icon { font-size: 4rem; opacity: .3; }
+  #empty-state p { font-size: .8rem; letter-spacing: .1em; }
+
+  /* Camera modal */
+  #camera-modal {
+    display: none;
+    position: fixed; inset: 0;
+    background: rgba(0,0,0,.85);
+    z-index: 1000;
+    align-items: center;
+    justify-content: center;
+  }
+  #camera-modal.open { display: flex; }
+  .camera-box {
+    background: var(--panel);
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    padding: 20px;
+    display: flex;
+    flex-direction: column;
+    gap: 14px;
+    max-width: 480px;
+    width: 90%;
+  }
+  .camera-box h2 {
+    font-family: 'Orbitron', sans-serif;
+    font-size: .9rem;
+    color: var(--cyan);
+    letter-spacing: .1em;
+  }
+  #camera-video {
+    width: 100%;
+    border-radius: 8px;
+    border: 1px solid var(--border);
+    background: #000;
+  }
+  .camera-actions { display: flex; gap: 10px; }
+  .camera-actions .btn { flex: 1; }
+
+  /* Canvas (hidden, for processing) */
+  #processing-canvas { display: none; }
+  #export-canvas { display: none; }
+
+  /* Toast */
+  #toast {
+    position: fixed;
+    bottom: 20px; left: 50%;
+    transform: translateX(-50%) translateY(60px);
+    background: #0d1117;
+    border: 1px solid var(--cyan);
+    color: var(--cyan);
+    padding: 8px 18px;
+    border-radius: 8px;
+    font-size: .75rem;
+    letter-spacing: .05em;
+    z-index: 5000;
+    transition: transform .3s cubic-bezier(.34,1.56,.64,1);
+    white-space: nowrap;
+    box-shadow: var(--glow-sm);
+  }
+  #toast.show { transform: translateX(-50%) translateY(0); }
+
+  /* Mobile layout */
+  @media (max-width: 700px) {
+    body { overflow: hidden; }
+    main { flex-direction: column; }
+    #controls {
+      width: 100%;
+      min-width: unset;
+      border-right: none;
+      border-bottom: 1px solid var(--border);
+      flex-direction: row;
+      flex-wrap: nowrap;
+      overflow-x: auto;
+      overflow-y: hidden;
+      padding: 10px;
+      gap: 10px;
+      max-height: 160px;
+    }
+    #controls::-webkit-scrollbar { height: 3px; }
+    .ctrl-group, .mobile-col { min-width: 160px; }
+    .section-label::after { display: none; }
+    #preview-panel { flex: 1; min-height: 0; }
+  }
+
+  /* Scrollbar style for controls on desktop */
+  @media (min-width: 701px) {
+    .mobile-col { display: contents; }
+  }
+
+  /* Glitch animation for logo */
+  @keyframes glitch {
+    0%,95%,100% { text-shadow: var(--glow); }
+    96% { text-shadow: -2px 0 #ff00aa, 2px 0 var(--cyan); }
+    97% { text-shadow: 2px 0 #ff00aa, -2px 0 var(--cyan); }
+  }
+  .logo { animation: glitch 5s infinite; }
+</style>
 </head>
 <body>
 
+<!-- Header -->
 <header>
   <div class="logo">PIXEL<span>GLYPH</span></div>
   <div class="header-right">
-    <span style="font-size:.65rem;color:#3a5a6a;letter-spacing:.1em;">SYSTEM_v2.0</span>
+    <span style="font-size:.65rem;color:#3a5a6a;letter-spacing:.1em;">ASCII ART GENERATOR</span>
   </div>
 </header>
 
+<!-- Main -->
 <main>
   <!-- Controls Panel -->
   <div id="controls">
-    
-    <div>
-      <div class="section-label">Input Source</div>
+
+    <!-- Upload -->
+    <div class="mobile-col">
+      <div class="section-label">Input</div>
       <div id="drop-zone" onclick="document.getElementById('file-input').click()">
         <span class="icon">⬡</span>
-        <p><strong>Drop image here</strong><br>or click to browse</p>
+        <p><strong>Drop image here</strong><br>or click to browse<br><span style="font-size:.65rem">JPG · PNG · WEBP</span></p>
       </div>
       <input type="file" id="file-input" accept="image/jpeg,image/png,image/webp" />
       <button class="btn btn-camera" onclick="openCamera()">
-        <span>◉</span> Capture Live
+        <span>◉</span> Use Camera
       </button>
     </div>
 
-    <div>
-      <div class="section-label">Rendering</div>
+    <!-- Character Settings -->
+    <div class="mobile-col">
+      <div class="section-label">Characters</div>
       <div class="ctrl-group">
         <div class="ctrl-row">
           <label>Character Set</label>
@@ -48,17 +563,18 @@
         </div>
         <div class="ctrl-row">
           <label>Font Size <span id="font-size-val">8px</span></label>
-          <input type="range" id="font-size" min="4" max="24" value="8" step="1" oninput="updateLabel(this,'font-size-val','px');scheduleRender()" />
+          <input type="range" id="font-size" min="4" max="20" value="8" step="1" oninput="updateLabel(this,'font-size-val','px');scheduleRender()" />
         </div>
         <div class="ctrl-row">
-          <label>Density <span id="out-width-val">120</span></label>
-          <input type="range" id="out-width" min="40" max="400" value="120" step="5" oninput="updateLabel(this,'out-width-val','');scheduleRender()" />
+          <label>Output Width <span id="out-width-val">120</span></label>
+          <input type="range" id="out-width" min="40" max="300" value="120" step="5" oninput="updateLabel(this,'out-width-val','');scheduleRender()" />
         </div>
       </div>
     </div>
 
-    <div>
-      <div class="section-label">Signal Processing</div>
+    <!-- Filters -->
+    <div class="mobile-col">
+      <div class="section-label">Filters</div>
       <div class="ctrl-group">
         <div class="ctrl-row">
           <label>Brightness <span id="brightness-val">100%</span></label>
@@ -69,14 +585,14 @@
           <input type="range" id="contrast" min="0" max="200" value="100" oninput="updateLabel(this,'contrast-val','%');scheduleRender()" />
         </div>
         <div class="toggle-row">
-          <span>Invert Output</span>
+          <span>Invert Colors</span>
           <label class="toggle">
             <input type="checkbox" id="invert-toggle" onchange="scheduleRender()" />
             <div class="toggle-track"></div>
           </label>
         </div>
         <div class="toggle-row">
-          <span>High-Key Mode</span>
+          <span>Light Background</span>
           <label class="toggle">
             <input type="checkbox" id="light-bg-toggle" onchange="toggleLightBg()" />
             <div class="toggle-track"></div>
@@ -85,22 +601,24 @@
       </div>
     </div>
 
-    <div>
-      <div class="section-label">Style Presets</div>
+    <!-- Presets -->
+    <div class="mobile-col">
+      <div class="section-label">Presets</div>
       <div class="preset-grid">
         <button class="preset-btn" onclick="applyPreset('terminal')">Terminal</button>
         <button class="preset-btn" onclick="applyPreset('matrix')">Matrix</button>
-        <button class="preset-btn" onclick="applyPreset('contrast')">High-Con</button>
-        <button class="preset-btn" onclick="applyPreset('purple')">Neon</button>
+        <button class="preset-btn" onclick="applyPreset('contrast')">Hi-Contrast</button>
+        <button class="preset-btn" onclick="applyPreset('purple')">Neon Purple</button>
       </div>
     </div>
 
-    <div>
-      <div class="section-label">Data Export</div>
+    <!-- Export -->
+    <div class="mobile-col">
+      <div class="section-label">Export</div>
       <div class="btn-export-row">
-        <button class="btn btn-primary" onclick="copyToClipboard()">⎘ Copy Text</button>
-        <button class="btn btn-secondary" onclick="downloadTxt()">↓ Export .txt</button>
-        <button class="btn btn-secondary" onclick="downloadPng()">↓ Render .png</button>
+        <button class="btn btn-primary" onclick="copyToClipboard()">⎘ Copy</button>
+        <button class="btn btn-secondary" onclick="downloadTxt()">↓ .txt</button>
+        <button class="btn btn-secondary" onclick="downloadPng()">↓ .png</button>
       </div>
     </div>
 
@@ -110,34 +628,342 @@
   <div id="preview-panel">
     <div id="preview-toolbar">
       <div class="status-dot" id="status-dot"></div>
-      <span id="status-text">SYSTEM_IDLE: Awaiting input stream...</span>
+      <span id="status-text">Awaiting image input…</span>
     </div>
     <div id="ascii-container">
       <pre id="ascii-output"></pre>
       <div id="empty-state">
         <div class="big-icon">⬡</div>
-        <p>INITIALIZE BY DROPPING IMAGE</p>
+        <p>Drop an image to begin</p>
       </div>
     </div>
   </div>
 </main>
 
+<!-- Camera Modal -->
 <div id="camera-modal">
   <div class="camera-box">
-    <h2 style="font-family:Orbitron; font-size:0.8rem; color:var(--cyan)">LIVE_CAPTURE_INITIATED</h2>
+    <h2>◉ CAMERA CAPTURE</h2>
     <video id="camera-video" autoplay playsinline muted></video>
-    <div style="display:flex; gap:10px">
-      <button class="btn btn-primary" onclick="captureCamera()">⊙ Capture Frame</button>
-      <button class="btn btn-secondary" onclick="closeCamera()">✕ Abort</button>
+    <div class="camera-actions">
+      <button class="btn btn-primary" onclick="captureCamera()">⊙ Capture</button>
+      <button class="btn btn-secondary" onclick="closeCamera()">✕ Close</button>
     </div>
   </div>
 </div>
 
-<canvas id="processing-canvas" style="display:none"></canvas>
-<canvas id="export-canvas" style="display:none"></canvas>
+<!-- Hidden canvases -->
+<canvas id="processing-canvas"></canvas>
+<canvas id="export-canvas"></canvas>
+
+<!-- Toast -->
 <div id="toast"></div>
 
-<script src="script.js">
+<script>
+/* =====================================================
+   PixelGlyph — ASCII Art Generator
+   Client-side only. Canvas API for processing.
+   ===================================================== */
+
+// Character sets mapped by name
+const CHARSETS = {
+  complex: '@#S%?*+;:,. ',
+  simple:  '@#*+:. ',
+  blocks:  '█▓▒░ · ',
+  binary:  '10 ',
+  braille: '⣿⣷⣶⣤⣀ '
+};
+
+// State
+let currentImage = null;   // ImageBitmap or HTMLImageElement
+let renderTimer = null;
+let cameraStream = null;
+let currentTheme = 'cyan'; // default
+
+// DOM refs
+const dropZone      = document.getElementById('drop-zone');
+const fileInput     = document.getElementById('file-input');
+const asciiOutput   = document.getElementById('ascii-output');
+const asciiContainer= document.getElementById('ascii-container');
+const statusDot     = document.getElementById('status-dot');
+const statusText    = document.getElementById('status-text');
+const emptyState    = document.getElementById('empty-state');
+const processingCanvas = document.getElementById('processing-canvas');
+const ctx           = processingCanvas.getContext('2d', { willReadFrequently: true });
+
+/* ---- Drag & Drop ---- */
+dropZone.addEventListener('dragover', e => {
+  e.preventDefault();
+  dropZone.classList.add('drag-over');
+});
+dropZone.addEventListener('dragleave', () => dropZone.classList.remove('drag-over'));
+dropZone.addEventListener('drop', e => {
+  e.preventDefault();
+  dropZone.classList.remove('drag-over');
+  const file = e.dataTransfer.files[0];
+  if (file) loadFile(file);
+});
+fileInput.addEventListener('change', () => {
+  if (fileInput.files[0]) loadFile(fileInput.files[0]);
+});
+
+/* ---- Load file from picker / drop ---- */
+function loadFile(file) {
+  if (!file.type.match(/image\/(jpeg|png|webp)/)) {
+    showToast('Unsupported format. Use JPG, PNG, or WEBP.');
+    return;
+  }
+  const reader = new FileReader();
+  reader.onload = e => {
+    const img = new Image();
+    img.onload = () => {
+      currentImage = img;
+      render();
+    };
+    img.src = e.target.result;
+  };
+  reader.readAsDataURL(file);
+}
+
+/* ---- Update slider label ---- */
+function updateLabel(el, labelId, suffix) {
+  document.getElementById(labelId).textContent = el.value + suffix;
+}
+
+/* ---- Debounced render trigger ---- */
+function scheduleRender() {
+  clearTimeout(renderTimer);
+  if (!currentImage) return;
+  renderTimer = setTimeout(render, 80);
+}
+
+/* ---- Core: convert image to ASCII ---- */
+function render() {
+  if (!currentImage) return;
+
+  const charsetKey  = document.getElementById('charset-select').value;
+  const fontSize    = parseInt(document.getElementById('font-size').value);
+  const outWidth    = parseInt(document.getElementById('out-width').value);
+  const brightness  = parseFloat(document.getElementById('brightness').value) / 100;
+  const contrast    = parseFloat(document.getElementById('contrast').value) / 100;
+  const invert      = document.getElementById('invert-toggle').checked;
+  const chars       = CHARSETS[charsetKey];
+
+  // Aspect ratio — monospace chars are ~2x taller than wide, so halve rows
+  const aspectRatio = currentImage.height / currentImage.width;
+  const outHeight   = Math.round(outWidth * aspectRatio * 0.45);
+
+  // Draw image scaled down onto canvas
+  processingCanvas.width  = outWidth;
+  processingCanvas.height = outHeight;
+  ctx.clearRect(0, 0, outWidth, outHeight);
+  ctx.drawImage(currentImage, 0, 0, outWidth, outHeight);
+
+  // Get pixel data
+  const imgData = ctx.getImageData(0, 0, outWidth, outHeight);
+  const data    = imgData.data;
+
+  setStatus('Processing…', true);
+
+  // Build ASCII string
+  let ascii = '';
+  for (let y = 0; y < outHeight; y++) {
+    for (let x = 0; x < outWidth; x++) {
+      const idx = (y * outWidth + x) * 4;
+      let r = data[idx], g = data[idx+1], b = data[idx+2];
+
+      // Grayscale (luminance formula)
+      let gray = 0.299 * r + 0.587 * g + 0.114 * b;
+
+      // Apply brightness
+      gray = gray * brightness;
+
+      // Apply contrast: formula: (value - 128) * contrast + 128
+      gray = (gray - 128) * contrast + 128;
+
+      // Clamp
+      gray = Math.max(0, Math.min(255, gray));
+
+      // Invert
+      if (invert) gray = 255 - gray;
+
+      // Map grayscale [0–255] → character index
+      // Dark pixels → dense chars, bright pixels → sparse
+      const charIndex = Math.floor((gray / 255) * (chars.length - 1));
+      ascii += chars[chars.length - 1 - charIndex];
+    }
+    ascii += '\n';
+  }
+
+  // Output
+  asciiOutput.textContent  = ascii;
+  asciiOutput.style.fontSize = fontSize + 'px';
+  emptyState.style.display = 'none';
+  setStatus(`${outWidth}×${outHeight} chars · font ${fontSize}px`, true);
+}
+
+/* ---- Set status bar ---- */
+function setStatus(msg, active) {
+  statusText.textContent = msg;
+  statusDot.classList.toggle('active', !!active);
+}
+
+/* ---- Apply preset ---- */
+function applyPreset(name) {
+  document.querySelectorAll('.preset-btn').forEach(b => b.classList.remove('active'));
+  event.target.classList.add('active');
+
+  // Remove all themes
+  asciiOutput.className = '';
+
+  const presets = {
+    terminal: { brightness: 110, contrast: 120, invert: false, charset: 'simple',  theme: 'terminal' },
+    matrix:   { brightness: 100, contrast: 150, invert: false, charset: 'binary',  theme: 'matrix' },
+    contrast: { brightness: 100, contrast: 200, invert: false, charset: 'complex', theme: 'contrast' },
+    purple:   { brightness: 100, contrast: 120, invert: true,  charset: 'blocks',  theme: 'purple' },
+  };
+
+  const p = presets[name];
+  if (!p) return;
+
+  document.getElementById('brightness').value = p.brightness;
+  document.getElementById('brightness-val').textContent = p.brightness + '%';
+  document.getElementById('contrast').value = p.contrast;
+  document.getElementById('contrast-val').textContent = p.contrast + '%';
+  document.getElementById('invert-toggle').checked = p.invert;
+  document.getElementById('charset-select').value = p.charset;
+  asciiOutput.classList.add('theme-' + p.theme);
+  currentTheme = p.theme;
+
+  scheduleRender();
+}
+
+/* ---- Toggle light background ---- */
+function toggleLightBg() {
+  const on = document.getElementById('light-bg-toggle').checked;
+  asciiContainer.classList.toggle('light-bg', on);
+}
+
+/* ---- Copy to clipboard ---- */
+function copyToClipboard() {
+  const text = asciiOutput.textContent;
+  if (!text.trim()) { showToast('Nothing to copy yet.'); return; }
+  navigator.clipboard.writeText(text)
+    .then(() => showToast('Copied to clipboard!'))
+    .catch(() => showToast('Copy failed.'));
+}
+
+/* ---- Download .txt ---- */
+function downloadTxt() {
+  const text = asciiOutput.textContent;
+  if (!text.trim()) { showToast('Generate ASCII first.'); return; }
+  const blob = new Blob([text], { type: 'text/plain' });
+  triggerDownload(URL.createObjectURL(blob), 'pixelglyph.txt');
+  showToast('Downloaded .txt');
+}
+
+/* ---- Download .png (render ASCII to canvas) ---- */
+function downloadPng() {
+  const text = asciiOutput.textContent;
+  if (!text.trim()) { showToast('Generate ASCII first.'); return; }
+
+  const fontSize  = parseInt(document.getElementById('font-size').value);
+  const lines     = text.split('\n');
+  const lineHeight = fontSize * 1.2;
+  const charWidth  = fontSize * 0.6; // monospace approximation
+
+  const maxLen = Math.max(...lines.map(l => l.length));
+  const W = Math.ceil(maxLen * charWidth) + 32;
+  const H = Math.ceil(lines.length * lineHeight) + 32;
+
+  const c = document.getElementById('export-canvas');
+  c.width  = W;
+  c.height = H;
+  const ectx = c.getContext('2d');
+
+  // Background
+  const lightBg = document.getElementById('light-bg-toggle').checked;
+  ectx.fillStyle = lightBg ? '#f0f0f0' : '#080b10';
+  ectx.fillRect(0, 0, W, H);
+
+  // Text color from current theme
+  const themeColors = {
+    cyan:     '#00ffe7',
+    matrix:   '#00ff41',
+    contrast: '#ffffff',
+    terminal: '#ffb700',
+    purple:   '#b400ff',
+  };
+  ectx.fillStyle = lightBg ? '#111' : (themeColors[currentTheme] || '#00ffe7');
+  ectx.font = `${fontSize}px 'Share Tech Mono', monospace`;
+  ectx.textBaseline = 'top';
+
+  lines.forEach((line, i) => {
+    ectx.fillText(line, 16, 16 + i * lineHeight);
+  });
+
+  c.toBlob(blob => {
+    triggerDownload(URL.createObjectURL(blob), 'pixelglyph.png');
+    showToast('Downloaded .png');
+  });
+}
+
+function triggerDownload(url, filename) {
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = filename;
+  a.click();
+  URL.revokeObjectURL(url);
+}
+
+/* ---- Camera ---- */
+function openCamera() {
+  document.getElementById('camera-modal').classList.add('open');
+  navigator.mediaDevices.getUserMedia({ video: { facingMode: 'environment' }, audio: false })
+    .then(stream => {
+      cameraStream = stream;
+      document.getElementById('camera-video').srcObject = stream;
+    })
+    .catch(() => {
+      showToast('Camera access denied.');
+      closeCamera();
+    });
+}
+
+function closeCamera() {
+  if (cameraStream) {
+    cameraStream.getTracks().forEach(t => t.stop());
+    cameraStream = null;
+  }
+  document.getElementById('camera-video').srcObject = null;
+  document.getElementById('camera-modal').classList.remove('open');
+}
+
+function captureCamera() {
+  const video = document.getElementById('camera-video');
+  const cap = document.createElement('canvas');
+  cap.width  = video.videoWidth  || 640;
+  cap.height = video.videoHeight || 480;
+  cap.getContext('2d').drawImage(video, 0, 0, cap.width, cap.height);
+  const img = new Image();
+  img.onload = () => {
+    currentImage = img;
+    closeCamera();
+    render();
+  };
+  img.src = cap.toDataURL('image/png');
+}
+
+/* ---- Toast notification ---- */
+function showToast(msg) {
+  const t = document.getElementById('toast');
+  t.textContent = msg;
+  t.classList.add('show');
+  setTimeout(() => t.classList.remove('show'), 2400);
+}
+
+/* ---- Init ---- */
+setStatus('Awaiting image input…', false);
 </script>
 </body>
 </html>
