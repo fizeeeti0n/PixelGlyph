@@ -1,0 +1,144 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>PixelGlyph — ASCII Art Generator</title>
+<script src="https://cdn.tailwindcss.com"></script>
+<link href="https://fonts.googleapis.com/css2?family=Share+Tech+Mono&family=Orbitron:wght@400;700;900&display=swap" rel="stylesheet" />
+<link rel="stylesheet" href="styles.css" />
+</head>
+<body>
+
+<header>
+  <div class="logo">PIXEL<span>GLYPH</span></div>
+  <div class="header-right">
+    <span style="font-size:.65rem;color:#3a5a6a;letter-spacing:.1em;">SYSTEM_v2.0</span>
+  </div>
+</header>
+
+<main>
+  <!-- Controls Panel -->
+  <div id="controls">
+    
+    <div>
+      <div class="section-label">Input Source</div>
+      <div id="drop-zone" onclick="document.getElementById('file-input').click()">
+        <span class="icon">⬡</span>
+        <p><strong>Drop image here</strong><br>or click to browse</p>
+      </div>
+      <input type="file" id="file-input" accept="image/jpeg,image/png,image/webp" />
+      <button class="btn btn-camera" onclick="openCamera()">
+        <span>◉</span> Capture Live
+      </button>
+    </div>
+
+    <div>
+      <div class="section-label">Rendering</div>
+      <div class="ctrl-group">
+        <div class="ctrl-row">
+          <label>Character Set</label>
+          <select id="charset-select" onchange="scheduleRender()">
+            <option value="complex">Complex  @#S%?*+;:,. </option>
+            <option value="simple">Simple   @#*+:. </option>
+            <option value="blocks">Blocks   █▓▒░ · </option>
+            <option value="binary">Binary   10 </option>
+            <option value="braille">Braille  ⣿⣷⣶⣤⣀  </option>
+          </select>
+        </div>
+        <div class="ctrl-row">
+          <label>Font Size <span id="font-size-val">8px</span></label>
+          <input type="range" id="font-size" min="4" max="24" value="8" step="1" oninput="updateLabel(this,'font-size-val','px');scheduleRender()" />
+        </div>
+        <div class="ctrl-row">
+          <label>Density <span id="out-width-val">120</span></label>
+          <input type="range" id="out-width" min="40" max="400" value="120" step="5" oninput="updateLabel(this,'out-width-val','');scheduleRender()" />
+        </div>
+      </div>
+    </div>
+
+    <div>
+      <div class="section-label">Signal Processing</div>
+      <div class="ctrl-group">
+        <div class="ctrl-row">
+          <label>Brightness <span id="brightness-val">100%</span></label>
+          <input type="range" id="brightness" min="0" max="200" value="100" oninput="updateLabel(this,'brightness-val','%');scheduleRender()" />
+        </div>
+        <div class="ctrl-row">
+          <label>Contrast <span id="contrast-val">100%</span></label>
+          <input type="range" id="contrast" min="0" max="200" value="100" oninput="updateLabel(this,'contrast-val','%');scheduleRender()" />
+        </div>
+        <div class="toggle-row">
+          <span>Invert Output</span>
+          <label class="toggle">
+            <input type="checkbox" id="invert-toggle" onchange="scheduleRender()" />
+            <div class="toggle-track"></div>
+          </label>
+        </div>
+        <div class="toggle-row">
+          <span>High-Key Mode</span>
+          <label class="toggle">
+            <input type="checkbox" id="light-bg-toggle" onchange="toggleLightBg()" />
+            <div class="toggle-track"></div>
+          </label>
+        </div>
+      </div>
+    </div>
+
+    <div>
+      <div class="section-label">Style Presets</div>
+      <div class="preset-grid">
+        <button class="preset-btn" onclick="applyPreset('terminal')">Terminal</button>
+        <button class="preset-btn" onclick="applyPreset('matrix')">Matrix</button>
+        <button class="preset-btn" onclick="applyPreset('contrast')">High-Con</button>
+        <button class="preset-btn" onclick="applyPreset('purple')">Neon</button>
+      </div>
+    </div>
+
+    <div>
+      <div class="section-label">Data Export</div>
+      <div class="btn-export-row">
+        <button class="btn btn-primary" onclick="copyToClipboard()">⎘ Copy Text</button>
+        <button class="btn btn-secondary" onclick="downloadTxt()">↓ Export .txt</button>
+        <button class="btn btn-secondary" onclick="downloadPng()">↓ Render .png</button>
+      </div>
+    </div>
+
+  </div>
+
+  <!-- Preview Panel -->
+  <div id="preview-panel">
+    <div id="preview-toolbar">
+      <div class="status-dot" id="status-dot"></div>
+      <span id="status-text">SYSTEM_IDLE: Awaiting input stream...</span>
+    </div>
+    <div id="ascii-container">
+      <pre id="ascii-output"></pre>
+      <div id="empty-state">
+        <div class="big-icon">⬡</div>
+        <p>INITIALIZE BY DROPPING IMAGE</p>
+      </div>
+    </div>
+  </div>
+</main>
+
+<div id="camera-modal">
+  <div class="camera-box">
+    <h2 style="font-family:Orbitron; font-size:0.8rem; color:var(--cyan)">LIVE_CAPTURE_INITIATED</h2>
+    <video id="camera-video" autoplay playsinline muted></video>
+    <div style="display:flex; gap:10px">
+      <button class="btn btn-primary" onclick="captureCamera()">⊙ Capture Frame</button>
+      <button class="btn btn-secondary" onclick="closeCamera()">✕ Abort</button>
+    </div>
+  </div>
+</div>
+
+<canvas id="processing-canvas" style="display:none"></canvas>
+<canvas id="export-canvas" style="display:none"></canvas>
+<div id="toast"></div>
+
+<script src="script.js">
+
+</script>
+</body>
+</html>
